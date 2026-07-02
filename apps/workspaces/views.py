@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-
 from apps.projects.models import Project
+from rest_framework.permissions import IsAuthenticated
 
 class TestWorkspaceView(APIView):
 
@@ -17,7 +17,7 @@ class TestWorkspaceView(APIView):
 
 
 class TestWorkspaceDataView(APIView):
-
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         projects = Project.objects.for_workspace(request.workspace)
 
