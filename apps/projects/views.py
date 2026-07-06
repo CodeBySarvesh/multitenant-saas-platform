@@ -33,31 +33,45 @@ class ProjectListCreateAPIView(APIView):
     
 
 class TaskListCreateAPIView(APIView):
-    # permission_classes = [IsAuthenticated, IsWorkspaceMember]
+
     def get_permissions(self):
-        if self.request.method == "GET":
-            return [IsAuthenticated(), IsMember()]
-        return [IsAuthenticated(), IsAdmin()]  # only admin+ can create
+        return [IsAuthenticated(), IsMember()]
+
     def get(self, request, project_id):
         tasks = Task.objects.filter(
             project__id=project_id,
             project__workspace=request.workspace
-        )
+        ).select_related("project", "assigned_to")
+
         serializer = TaskSerializer(tasks, many=True)
         return Response(serializer.data)
 
     def post(self, request, project_id):
         try:
             project = Project.objects.get(
-            id=project_id,
-            workspace=request.workspace
+                id=project_id,
+                workspace=request.workspace
             )
         except Project.DoesNotExist:
             return Response({"error": "Project not found"}, status=404)
 
-        serializer = TaskSerializer(data=request.data)
+        serializer = TaskSerializer(data=request.data, context={"request": request})
 
         if serializer.is_valid():
+            assigned_user = serializer.validated_data.get("assigned_to")
+
+            membership = Membership.objects.get(
+                user=request.user,
+                workspace=request.workspace
+            )
+
+            if membership.role not in ["admin", "owner"]:
+                if assigned_user and assigned_user != request.user:
+                    return Response(
+                        {"error": "You can assign task only to yourself"},
+                        status=403
+                    )
+
             serializer.save(project=project)
             return Response(serializer.data, status=201)
 

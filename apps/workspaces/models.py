@@ -1,9 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
-
 from apps.common.models import WorkspaceBaseModel
-
-User = get_user_model()
+# User = get_user_model()
 from django.conf import settings
 
 class Workspace(WorkspaceBaseModel):
