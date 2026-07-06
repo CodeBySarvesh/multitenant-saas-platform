@@ -3,7 +3,7 @@ from .models import Workspace, Membership
 
 
 class WorkspaceAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'get_owners']
+    list_display = ['id', 'name', 'get_owners','created_at']
 
     def get_owners(self, obj):
         owners = Membership.objects.filter(
@@ -21,7 +21,7 @@ admin.site.register(Workspace, WorkspaceAdmin)
 
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "workspace", "role")
+    list_display = ("id", "user", "workspace", "role",'created_at')
     list_filter = ("role", "workspace")
     search_fields = (
         "user__username",

@@ -4,18 +4,20 @@ from rest_framework import status
 from apps.tasks.models import Task
 from apps.workspaces.models import Membership
 from rest_framework.permissions import IsAuthenticated
+
+from apps.workspaces.permissions import IsAdmin, IsMember, IsWorkspaceMember
 from .models import Project
 from .serializers import ProjectSerializer, TaskSerializer
 
 
 class ProjectListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated,IsWorkspaceMember]
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsAuthenticated(), IsMember()]
+        return [IsAuthenticated(), IsAdmin()]  # only admin+ can create
+
     def get(self, request):
-        if not Membership.objects.filter(
-            workspace=request.workspace,
-            user=request.user
-        ).exists():
-            return Response({"error": "Not allowed"}, status=403)
         projects = Project.objects.filter(workspace=request.workspace)
         serializer = ProjectSerializer(projects, many=True)
         return Response(serializer.data)
@@ -31,13 +33,12 @@ class ProjectListCreateAPIView(APIView):
     
 
 class TaskListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated, IsWorkspaceMember]
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsAuthenticated(), IsMember()]
+        return [IsAuthenticated(), IsAdmin()]  # only admin+ can create
     def get(self, request, project_id):
-        if not Membership.objects.filter(
-            workspace=request.workspace,
-            user=request.user
-        ).exists():
-            return Response({"error": "Not allowed"}, status=403)
         tasks = Task.objects.filter(
             project__id=project_id,
             project__workspace=request.workspace
@@ -46,13 +47,6 @@ class TaskListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request, project_id):
-        membership = Membership.objects.filter(
-            workspace=request.workspace,
-            user=request.user
-        ).first()
-
-        if not membership:
-            return Response({"error": "Not allowed"}, status=403)
         try:
             project = Project.objects.get(
             id=project_id,
