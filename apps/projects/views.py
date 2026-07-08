@@ -1,13 +1,13 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from apps.tasks.models import Task
+from apps.tasks.models import Task, TaskComment
 from apps.workspaces.models import Membership
 from rest_framework.permissions import IsAuthenticated
 
 from apps.workspaces.permissions import IsAdmin, IsMember, IsWorkspaceMember
 from .models import Project
-from .serializers import ProjectSerializer, TaskSerializer
+from .serializers import ProjectSerializer, TaskCommentSerializer, TaskSerializer
 
 
 class ProjectListCreateAPIView(APIView):
@@ -73,6 +73,41 @@ class TaskListCreateAPIView(APIView):
                     )
 
             serializer.save(project=project)
+            return Response(serializer.data, status=201)
+
+        return Response(serializer.errors, status=400)
+ 
+    
+class TaskCommentAPIView(APIView):
+
+    def get_permissions(self):
+        return [IsAuthenticated(), IsMember()]
+
+    def get(self, request, task_id):
+        comments = TaskComment.objects.filter(
+            task__id=task_id,
+            task__project__workspace=request.workspace
+        ).select_related("user")
+
+        serializer = TaskCommentSerializer(comments, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, task_id):
+        try:
+            task = Task.objects.get(
+                id=task_id,
+                project__workspace=request.workspace
+            )
+        except Task.DoesNotExist:
+            return Response({"error": "Task not found"}, status=404)
+
+        serializer = TaskCommentSerializer(
+            data=request.data,
+            context={"request": request}
+        )
+
+        if serializer.is_valid():
+            serializer.save(user=request.user, task=task)
             return Response(serializer.data, status=201)
 
         return Response(serializer.errors, status=400)

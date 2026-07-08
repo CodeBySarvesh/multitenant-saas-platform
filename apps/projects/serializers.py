@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.tasks.models import Task
+from apps.tasks.models import Task, TaskComment
 from apps.workspaces.models import Membership
 from .models import Project
 
@@ -34,3 +34,12 @@ class TaskSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User not in this workspace")
 
         return user
+    
+
+class TaskCommentSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = TaskComment
+        fields = ["id", "task", "user_email", "content", "created_at"]
+        read_only_fields = ["task"]
