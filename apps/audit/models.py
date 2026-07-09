@@ -1,3 +1,24 @@
 from django.db import models
+from django.conf import settings
 
-# Create your models here.
+class ActivityLog(models.Model):
+    ACTION_CHOICES = [
+        ("task_created", "Task Created"),
+        ("task_updated", "Task Updated"),
+        ("task_deleted", "Task Deleted"),
+        ("comment_added", "Comment Added"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+
+    workspace = models.ForeignKey("workspaces.Workspace", on_delete=models.CASCADE)
+
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+
+    message = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)

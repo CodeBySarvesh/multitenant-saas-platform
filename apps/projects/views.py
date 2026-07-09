@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from apps.audit.models import ActivityLog
 from apps.tasks.models import Task, TaskComment
 from apps.workspaces.models import Membership
 from rest_framework.permissions import IsAuthenticated
@@ -72,7 +73,14 @@ class TaskListCreateAPIView(APIView):
                         status=403
                     )
 
+            task_title = serializer.validated_data.get("title")
             serializer.save(project=project)
+            ActivityLog.objects.create(
+                user=request.user,
+                workspace=request.workspace,
+                action="task_created",
+                message=f"{request.user.email} created task '{task_title}'"
+            )
             return Response(serializer.data, status=201)
 
         return Response(serializer.errors, status=400)
@@ -107,7 +115,14 @@ class TaskCommentAPIView(APIView):
         )
 
         if serializer.is_valid():
+            
             serializer.save(user=request.user, task=task)
+            ActivityLog.objects.create(
+                user=request.user,
+                workspace=request.workspace,
+                action="comment_added",
+                message=f"{request.user.email} commented on task '{task.title}'"
+            )
             return Response(serializer.data, status=201)
 
         return Response(serializer.errors, status=400)
