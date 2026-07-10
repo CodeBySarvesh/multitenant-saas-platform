@@ -5,7 +5,7 @@ from apps.audit.models import ActivityLog
 from apps.tasks.models import Task, TaskComment
 from apps.workspaces.models import Membership
 from rest_framework.permissions import IsAuthenticated
-
+from rest_framework.pagination import PageNumberPagination
 from apps.workspaces.permissions import IsAdmin, IsMember, IsWorkspaceMember
 from .models import Project
 from .serializers import ProjectSerializer, TaskCommentSerializer, TaskSerializer
@@ -34,18 +34,32 @@ class ProjectListCreateAPIView(APIView):
     
 
 class TaskListCreateAPIView(APIView):
-
+    pagination_class = PageNumberPagination
     def get_permissions(self):
         return [IsAuthenticated(), IsMember()]
 
+    # def get(self, request, project_id):
+    #     tasks = Task.objects.filter(
+    #         project__id=project_id,
+    #         project__workspace=request.workspace
+    #     ).select_related("project", "assigned_to")
+
+    #     serializer = TaskSerializer(tasks, many=True)
+    #     return Response(serializer.data)
+
+    # ---after pagination class---
     def get(self, request, project_id):
         tasks = Task.objects.filter(
             project__id=project_id,
             project__workspace=request.workspace
         ).select_related("project", "assigned_to")
 
-        serializer = TaskSerializer(tasks, many=True)
-        return Response(serializer.data)
+        paginator = self.pagination_class()
+        paginated_tasks = paginator.paginate_queryset(tasks, request)
+
+        serializer = TaskSerializer(paginated_tasks, many=True)
+
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request, project_id):
         try:
