@@ -3,26 +3,33 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from apps.audit.models import ActivityLog
+from apps.audit.serializers import ActivityLogSerializer
 from apps.workspaces.permissions import IsAdmin, IsMember, IsWorkspaceMember
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.generics import ListAPIView
 
-class ActivityLogAPIView(APIView):
+class ActivityLogAPIView(ListAPIView):
+    permission_classes = [IsAuthenticated, IsMember]
 
-    def get_permissions(self):
-        return [IsAuthenticated(), IsMember()]
+    filter_backends = [
+        DjangoFilterBackend,
+        SearchFilter,
+        OrderingFilter,
+    ]
 
-    def get(self, request):
-        logs = ActivityLog.objects.filter(
-            workspace=request.workspace
-        ).select_related("user").order_by("-created_at")
+    filterset_fields = ["action", "user"]
+    search_fields = ["message", "action"]
+    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
 
-        data = [
-            {
-                "user": log.user.email if log.user else None,
-                "action": log.action,
-                "message": log.message,
-                "time": log.created_at
-            }
-            for log in logs
-        ]
+    def get_queryset(self):
+        return (
+            ActivityLog.objects.filter(
+                workspace=self.request.workspace
+            )
+            .select_related("user")
+        )
 
-        return Response(data)
+    def get_serializer_class(self):
+        return ActivityLogSerializer

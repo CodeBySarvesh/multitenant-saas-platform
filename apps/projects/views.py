@@ -1,4 +1,4 @@
-from rest_framework.views import APIView
+from rest_framework.views import APIView, PermissionDenied
 from rest_framework.response import Response
 from rest_framework import status
 from apps.audit.models import ActivityLog
@@ -9,134 +9,111 @@ from rest_framework.pagination import PageNumberPagination
 from apps.workspaces.permissions import IsAdmin, IsMember, IsWorkspaceMember
 from .models import Project
 from .serializers import ProjectSerializer, TaskCommentSerializer, TaskSerializer
+from rest_framework.generics import ListCreateAPIView, get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter
 
+class ProjectListCreateAPIView(ListCreateAPIView):
+    serializer_class = ProjectSerializer
 
-class ProjectListCreateAPIView(APIView):
-    # permission_classes = [IsAuthenticated,IsWorkspaceMember]
+    # Filter & Search
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ["name"]
+    search_fields = ["name", "description"]
+
     def get_permissions(self):
         if self.request.method == "GET":
             return [IsAuthenticated(), IsMember()]
-        return [IsAuthenticated(), IsAdmin()]  # only admin+ can create
+        return [IsAuthenticated(), IsAdmin()]
 
-    def get(self, request):
-        projects = Project.objects.filter(workspace=request.workspace)
-        serializer = ProjectSerializer(projects, many=True)
-        return Response(serializer.data)
-
-    def post(self, request):
-        serializer = ProjectSerializer(data=request.data)
-
-        if serializer.is_valid():
-            serializer.save(workspace=request.workspace)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=400)
-    
-
-class TaskListCreateAPIView(APIView):
-    pagination_class = PageNumberPagination
-    def get_permissions(self):
-        return [IsAuthenticated(), IsMember()]
-
-    # def get(self, request, project_id):
-    #     tasks = Task.objects.filter(
-    #         project__id=project_id,
-    #         project__workspace=request.workspace
-    #     ).select_related("project", "assigned_to")
-
-    #     serializer = TaskSerializer(tasks, many=True)
-    #     return Response(serializer.data)
-
-    # ---after pagination class---
-    def get(self, request, project_id):
-        tasks = Task.objects.filter(
-            project__id=project_id,
-            project__workspace=request.workspace
-        ).select_related("project", "assigned_to")
-
-        paginator = self.pagination_class()
-        paginated_tasks = paginator.paginate_queryset(tasks, request)
-
-        serializer = TaskSerializer(paginated_tasks, many=True)
-
-        return paginator.get_paginated_response(serializer.data)
-
-    def post(self, request, project_id):
-        try:
-            project = Project.objects.get(
-                id=project_id,
-                workspace=request.workspace
-            )
-        except Project.DoesNotExist:
-            return Response({"error": "Project not found"}, status=404)
-
-        serializer = TaskSerializer(data=request.data, context={"request": request})
-
-        if serializer.is_valid():
-            assigned_user = serializer.validated_data.get("assigned_to")
-
-            membership = Membership.objects.get(
-                user=request.user,
-                workspace=request.workspace
-            )
-
-            if membership.role not in ["admin", "owner"]:
-                if assigned_user and assigned_user != request.user:
-                    return Response(
-                        {"error": "You can assign task only to yourself"},
-                        status=403
-                    )
-
-            task_title = serializer.validated_data.get("title")
-            serializer.save(project=project)
-            ActivityLog.objects.create(
-                user=request.user,
-                workspace=request.workspace,
-                action="task_created",
-                message=f"{request.user.email} created task '{task_title}'"
-            )
-            return Response(serializer.data, status=201)
-
-        return Response(serializer.errors, status=400)
- 
-    
-class TaskCommentAPIView(APIView):
-
-    def get_permissions(self):
-        return [IsAuthenticated(), IsMember()]
-
-    def get(self, request, task_id):
-        comments = TaskComment.objects.filter(
-            task__id=task_id,
-            task__project__workspace=request.workspace
-        ).select_related("user")
-
-        serializer = TaskCommentSerializer(comments, many=True)
-        return Response(serializer.data)
-
-    def post(self, request, task_id):
-        try:
-            task = Task.objects.get(
-                id=task_id,
-                project__workspace=request.workspace
-            )
-        except Task.DoesNotExist:
-            return Response({"error": "Task not found"}, status=404)
-
-        serializer = TaskCommentSerializer(
-            data=request.data,
-            context={"request": request}
+    def get_queryset(self):
+        return Project.objects.filter(
+            workspace=self.request.workspace
         )
 
-        if serializer.is_valid():
-            
-            serializer.save(user=request.user, task=task)
-            ActivityLog.objects.create(
-                user=request.user,
-                workspace=request.workspace,
-                action="comment_added",
-                message=f"{request.user.email} commented on task '{task.title}'"
-            )
-            return Response(serializer.data, status=201)
+    def perform_create(self, serializer):
+        serializer.save(workspace=self.request.workspace)
+    
 
-        return Response(serializer.errors, status=400)
+
+class TaskListCreateAPIView(ListCreateAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated, IsMember]
+
+    filter_backends = [DjangoFilterBackend,SearchFilter]
+    filterset_fields = ["status"]
+    search_fields = ["title", "description"]
+
+    def get_queryset(self):
+        return Task.objects.filter(
+            project__id=self.kwargs["project_id"],
+            project__workspace=self.request.workspace
+        ).select_related("project", "assigned_to")
+
+    def perform_create(self, serializer):
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"],
+            workspace=self.request.workspace
+        )
+
+        assigned_user = serializer.validated_data.get("assigned_to")
+
+        membership = Membership.objects.get(
+            user=self.request.user,
+            workspace=self.request.workspace
+        )
+
+        if membership.role not in ["admin", "owner"]:
+            if assigned_user and assigned_user != self.request.user:
+                raise PermissionDenied(
+                    "You can assign task only to yourself."
+                )
+
+        task = serializer.save(project=project)
+
+        ActivityLog.objects.create(
+            user=self.request.user,
+            workspace=self.request.workspace,
+            action="task_created",
+            message=f"{self.request.user.email} created task '{task.title}'"
+        )
+ 
+    
+class TaskCommentAPIView(ListCreateAPIView):
+    serializer_class = TaskCommentSerializer
+
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ["user"]
+    search_fields = ["content"]
+
+    def get_permissions(self):
+        return [IsAuthenticated(), IsMember()]
+
+    def get_queryset(self):
+        return (
+            TaskComment.objects.filter(
+                task__id=self.kwargs["task_id"],
+                task__project__workspace=self.request.workspace,
+            )
+            .select_related("user")
+        )
+
+    def perform_create(self, serializer):
+        task = get_object_or_404(
+            Task,
+            id=self.kwargs["task_id"],
+            project__workspace=self.request.workspace,
+        )
+
+        serializer.save(
+            user=self.request.user,
+            task=task,
+        )
+
+        ActivityLog.objects.create(
+            user=self.request.user,
+            workspace=self.request.workspace,
+            action="comment_added",
+            message=f"{self.request.user.email} commented on task '{task.title}'",
+        )

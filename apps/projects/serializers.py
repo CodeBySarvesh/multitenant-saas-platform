@@ -42,4 +42,4 @@ class TaskCommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskComment
         fields = ["id", "task", "user_email", "content", "created_at"]
-        read_only_fields = ["task"]
+        read_only_fields = ["task", "user_email", "created_at"]
