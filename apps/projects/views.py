@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from apps.workspaces.permissions import IsAdmin, IsMember, IsWorkspaceMember
 from .models import Project
-from .serializers import ProjectSerializer, TaskCommentSerializer, TaskSerializer
+from .serializers import ProjectSerializer, TaskAttachmentSerializer, TaskCommentSerializer, TaskSerializer
 from rest_framework.generics import ListCreateAPIView, get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
@@ -117,3 +117,24 @@ class TaskCommentAPIView(ListCreateAPIView):
             action="comment_added",
             message=f"{self.request.user.email} commented on task '{task.title}'",
         )
+
+
+class TaskAttachmentAPIView(APIView):
+    def get_permissions(self):
+        return [IsAuthenticated(), IsMember()]
+    def post(self, request, task_id):
+        try:
+            task = Task.objects.get(
+                id=task_id,
+                project__workspace=request.workspace
+            )
+        except Task.DoesNotExist:
+            return Response({"error": "Task not found"}, status=404)
+
+        serializer = TaskAttachmentSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save(task=task, uploaded_by=request.user)
+            return Response(serializer.data, status=201)
+
+        return Response(serializer.errors, status=400)

@@ -45,3 +45,21 @@ class TaskComment(models.Model):
     content = models.TextField()
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class TaskAttachment(models.Model):
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="attachments"
+    )
+
+    file = models.FileField(upload_to="task_attachments/")
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)

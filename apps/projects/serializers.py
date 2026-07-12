@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.tasks.models import Task, TaskComment
+from apps.tasks.models import Task, TaskAttachment, TaskComment
 from apps.workspaces.models import Membership
 from .models import Project
 
@@ -43,3 +43,10 @@ class TaskCommentSerializer(serializers.ModelSerializer):
         model = TaskComment
         fields = ["id", "task", "user_email", "content", "created_at"]
         read_only_fields = ["task", "user_email", "created_at"]
+
+
+class TaskAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskAttachment
+        fields = "__all__"
+        read_only_fields = ["uploaded_by","task"]
