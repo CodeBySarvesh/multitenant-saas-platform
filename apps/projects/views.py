@@ -34,7 +34,66 @@ class ProjectListCreateAPIView(ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(workspace=self.request.workspace)
     
+class ProjectDeleteAPIView(APIView):
 
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def delete(self, request, pk):
+
+        project = get_object_or_404(
+            Project.all_objects.for_workspace(request.workspace),
+            pk=pk
+        )
+
+        if project.is_deleted:
+            return Response(
+                {"detail": "Project is already archived."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        project.soft_delete()
+
+        ActivityLog.objects.create(
+            workspace=request.workspace,
+            user=request.user,
+            action="project_archived",
+            message=f"{request.user.email} archived project '{project.name}'"
+        )
+
+        return Response(
+            {"detail": "Project archived successfully."},
+            status=status.HTTP_200_OK
+        )
+
+class ProjectRestoreAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request, pk):
+
+        project = get_object_or_404(
+            Project.all_objects.for_workspace(request.workspace),
+            pk=pk
+        )
+
+        if not project.is_deleted:
+            return Response(
+                {"detail": "Project is already active."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        project.restore()
+
+        ActivityLog.objects.create(
+            workspace=request.workspace,
+            user=request.user,
+            action="project_restored",
+            message=f"{request.user.email} restored project '{project.name}'"
+        )
+
+        return Response(
+            {"detail": "Project restored successfully."},
+            status=status.HTTP_200_OK
+        )
 
 class TaskListCreateAPIView(ListCreateAPIView):
     serializer_class = TaskSerializer

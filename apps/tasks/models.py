@@ -1,10 +1,10 @@
 from django.db import models
-from apps.common.models import WorkspaceBaseModel
+from apps.common.models import SoftDeleteModel
 from apps.common.managers import WorkspaceManager
 from apps.projects.models import Project
 from django.conf import settings
 
-class Task(WorkspaceBaseModel):
+class Task(SoftDeleteModel):
 
     STATUS_CHOICES = [
         ('todo', 'To Do'),
@@ -30,7 +30,7 @@ class Task(WorkspaceBaseModel):
 
 
 
-class TaskComment(models.Model):
+class TaskComment(SoftDeleteModel):
     task = models.ForeignKey(
         "Task",
         on_delete=models.CASCADE,

@@ -5,7 +5,12 @@ class ActivityLog(models.Model):
     ACTION_CHOICES = [
         ("task_created", "Task Created"),
         ("task_updated", "Task Updated"),
-        ("task_deleted", "Task Deleted"),
+        ("task_archived", "Task Archived"),
+        ("task_restored", "Task Restored"),
+        ("project_created", "Project Created"),
+        ("project_updated", "Project Updated"),
+        ("project_archived", "Project Archived"),
+        ("project_restored", "Project Restored"),
         ("comment_added", "Comment Added"),
     ]
 

@@ -1,16 +1,16 @@
 from django.db import models
 from django.contrib.auth import get_user_model
-from apps.common.models import WorkspaceBaseModel
+from apps.common.models import DateTimeBaseModel,SoftDeleteModel
 # User = get_user_model()
 from django.conf import settings
 
-class Workspace(WorkspaceBaseModel):
+class Workspace(SoftDeleteModel):
     name = models.CharField(max_length=255)
 
     def __str__(self):
         return self.name
     
-class Membership(WorkspaceBaseModel):
+class Membership(DateTimeBaseModel):
     ROLE_CHOICES = (
         ('owner', 'Owner'),
         ('admin', 'Admin'),
