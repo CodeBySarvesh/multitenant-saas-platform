@@ -40,36 +40,36 @@ class AllObjectsManager(models.Manager):
             using=self._db
         )
 
-class WorkspaceQuerySet(SoftDeleteQuerySet):
+# class WorkspaceQuerySet(SoftDeleteQuerySet):
 
-    def for_workspace(self, workspace):
-        if workspace is None:
-            return self.none()
-        return self.filter(workspace=workspace)
+#     def for_workspace(self, workspace):
+#         if workspace is None:
+#             return self.none()
+#         return self.filter(workspace=workspace)
 
 
-class WorkspaceManager(SoftDeleteManager):
+# class WorkspaceManager(SoftDeleteManager):
 
-    def get_queryset(self):
-        return WorkspaceQuerySet(
-            self.model,
-            using=self._db
-        ).active()
+#     def get_queryset(self):
+#         return WorkspaceQuerySet(
+#             self.model,
+#             using=self._db
+#         ).active()
 
-    def for_workspace(self, workspace):
-        return self.get_queryset().for_workspace(workspace)
+#     def for_workspace(self, workspace):
+#         return self.get_queryset().for_workspace(workspace)
     
 
-class AllWorkspaceManager(AllObjectsManager):
+# class AllWorkspaceManager(AllObjectsManager):
 
-    def get_queryset(self):
-        return WorkspaceQuerySet(
-            self.model,
-            using=self._db
-        )
+#     def get_queryset(self):
+#         return WorkspaceQuerySet(
+#             self.model,
+#             using=self._db
+#         )
 
-    def for_workspace(self, workspace):
-        return self.get_queryset().for_workspace(workspace)
+#     def for_workspace(self, workspace):
+#         return self.get_queryset().for_workspace(workspace)
     
 # class WorkspaceManager(models.Manager.from_queryset(WorkspaceQuerySet)):
 #     pass

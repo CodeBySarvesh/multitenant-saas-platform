@@ -94,7 +94,7 @@ class ProjectRestoreAPIView(APIView):
             {"detail": "Project restored successfully."},
             status=status.HTTP_200_OK
         )
-
+# ---- Task-----
 class TaskListCreateAPIView(ListCreateAPIView):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated, IsMember]
@@ -105,14 +105,14 @@ class TaskListCreateAPIView(ListCreateAPIView):
 
     def get_queryset(self):
         return Task.objects.filter(
-            project__id=self.kwargs["project_id"],
+            project__id=self.kwargs["pk"],
             project__workspace=self.request.workspace
         ).select_related("project", "assigned_to")
 
     def perform_create(self, serializer):
         project = get_object_or_404(
             Project,
-            id=self.kwargs["project_id"],
+            id=self.kwargs["pk"],
             workspace=self.request.workspace
         )
 
@@ -138,7 +138,67 @@ class TaskListCreateAPIView(ListCreateAPIView):
             message=f"{self.request.user.email} created task '{task.title}'"
         )
  
+class TaskDeleteAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def delete(self, request, pk):
+
+        task = get_object_or_404(
+            Task.all_objects.for_workspace(request.workspace),
+            pk=pk
+        )
+
+        if task.is_deleted:
+            return Response(
+                {"detail": "Task is already archived."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        task.soft_delete()
+
+        ActivityLog.objects.create(
+            workspace=request.workspace,
+            user=request.user,
+            action="task_archived",
+            message=f"{request.user.email} archived task '{task.title}'"
+        )
+
+        return Response(
+            {"detail": "Task archived successfully."},
+            status=status.HTTP_200_OK
+        )
     
+class TaskRestoreAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request, pk):
+
+        task = get_object_or_404(
+            Task.all_objects.for_workspace(request.workspace),
+            pk=pk
+        )
+
+        if not task.is_deleted:
+            return Response(
+                {"detail": "Task is already active."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        task.restore()
+
+        ActivityLog.objects.create(
+            workspace=request.workspace,
+            user=request.user,
+            action="task_restored",
+            message=f"{request.user.email} restored task '{task.title}'"
+        )
+
+        return Response(
+            {"detail": "Task restored successfully."},
+            status=status.HTTP_200_OK
+        )
+
+# ---Task Comment---
 class TaskCommentAPIView(ListCreateAPIView):
     serializer_class = TaskCommentSerializer
 
@@ -152,7 +212,7 @@ class TaskCommentAPIView(ListCreateAPIView):
     def get_queryset(self):
         return (
             TaskComment.objects.filter(
-                task__id=self.kwargs["task_id"],
+                task__id=self.kwargs["pk"],
                 task__project__workspace=self.request.workspace,
             )
             .select_related("user")
@@ -161,7 +221,7 @@ class TaskCommentAPIView(ListCreateAPIView):
     def perform_create(self, serializer):
         task = get_object_or_404(
             Task,
-            id=self.kwargs["task_id"],
+            id=self.kwargs["pk"],
             project__workspace=self.request.workspace,
         )
 
@@ -173,11 +233,83 @@ class TaskCommentAPIView(ListCreateAPIView):
         ActivityLog.objects.create(
             user=self.request.user,
             workspace=self.request.workspace,
-            action="comment_added",
+            action="task_comment_created",
             message=f"{self.request.user.email} commented on task '{task.title}'",
         )
 
+class TaskCommentDeleteAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
 
+    def delete(self, request, pk):
+
+        comment = TaskComment.all_objects.filter(
+            pk=pk
+        ).first()
+
+        if not comment:
+            return Response(
+                {"detail": "Task comment not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if comment.task.project.workspace != request.workspace:
+            return Response(
+                {"detail": "You do not have permission to access this task comment."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if comment.is_deleted:
+            return Response(
+                {"detail": "Task comment is already archived."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        comment.soft_delete()
+
+        ActivityLog.objects.create(
+            workspace=request.workspace,
+            user=request.user,
+            action="task_comment_archived",
+            message=f"{request.user.email} archived a comment on task '{comment.task.title}'"
+        )
+
+        return Response(
+            {"detail": "Task comment archived successfully."},
+            status=status.HTTP_200_OK
+        )
+
+
+class TaskCommentRestoreAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request, pk):
+
+        comment = get_object_or_404(
+            TaskComment.all_objects.for_workspace(request.workspace),
+            pk=pk
+        )
+
+        if not comment.is_deleted:
+            return Response(
+                {"detail": "Task comment is already active."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        comment.restore()
+
+        ActivityLog.objects.create(
+            workspace=request.workspace,
+            user=request.user,
+            action="task_comment_restored",
+            message=f"{request.user.email} restored a comment on task '{comment.task.title}'"
+        )
+
+        return Response(
+            {"detail": "Task comment restored successfully."},
+            status=status.HTTP_200_OK
+        )
+
+# ---Task Attachment ---
 class TaskAttachmentAPIView(APIView):
     def get_permissions(self):
         return [IsAuthenticated(), IsMember()]

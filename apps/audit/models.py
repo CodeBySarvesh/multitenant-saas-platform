@@ -3,15 +3,18 @@ from django.conf import settings
 
 class ActivityLog(models.Model):
     ACTION_CHOICES = [
+        ("workspace_created", "Workspace Created"),
         ("task_created", "Task Created"),
         ("task_updated", "Task Updated"),
         ("task_archived", "Task Archived"),
         ("task_restored", "Task Restored"),
+        ("task_comment_created", "Task Comment Created"),
+        ("task_comment_archived", "Task Comment Archived"),
+        ("task_comment_restored", "Task Comment Restored"),
         ("project_created", "Project Created"),
         ("project_updated", "Project Updated"),
         ("project_archived", "Project Archived"),
         ("project_restored", "Project Restored"),
-        ("comment_added", "Comment Added"),
     ]
 
     user = models.ForeignKey(

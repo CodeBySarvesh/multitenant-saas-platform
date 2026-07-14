@@ -1,8 +1,9 @@
 from django.db import models
 from apps.common.models import SoftDeleteModel
-from apps.common.managers import WorkspaceManager
 from apps.projects.models import Project
 from django.conf import settings
+
+from apps.tasks.managers import AllTaskAttachmentManager, AllTaskCommentManager, AllTaskManager, TaskAttachmentManager, TaskCommentManager, TaskManager
 
 class Task(SoftDeleteModel):
 
@@ -24,6 +25,8 @@ class Task(SoftDeleteModel):
         blank=True,
         related_name="assigned_tasks"
     )
+    objects = TaskManager()
+    all_objects = AllTaskManager()
 
     def __str__(self):
         return self.title
@@ -44,10 +47,11 @@ class TaskComment(SoftDeleteModel):
 
     content = models.TextField()
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    objects = TaskCommentManager()
+    all_objects = AllTaskCommentManager()
 
 
-class TaskAttachment(models.Model):
+class TaskAttachment(SoftDeleteModel):
     task = models.ForeignKey(
         Task,
         on_delete=models.CASCADE,
@@ -61,5 +65,5 @@ class TaskAttachment(models.Model):
         on_delete=models.SET_NULL,
         null=True
     )
-
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+    objects = TaskAttachmentManager()
+    all_objects = AllTaskAttachmentManager()

@@ -1,6 +1,6 @@
 from django.db import models
 from apps.common.models import SoftDeleteModel
-from apps.common.managers import AllWorkspaceManager, WorkspaceManager
+from apps.projects.managers import AllProjectManager, ProjectManager
 
 
 class Project(SoftDeleteModel):
@@ -11,8 +11,8 @@ class Project(SoftDeleteModel):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
 
-    objects = WorkspaceManager()
-    all_objects = AllWorkspaceManager()
+    objects = ProjectManager()
+    all_objects = AllProjectManager()
 
     def __str__(self):
         return self.name
