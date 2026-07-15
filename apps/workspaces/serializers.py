@@ -11,7 +11,7 @@ class WorkspaceSerializer(serializers.ModelSerializer):
         read_only_fields = ["id","created_at","updated_at"]
 
 
-class MembershipSerializer(serializers.ModelSerializer):
+class MembershipReadSerializer(serializers.ModelSerializer):
 
     workspace = WorkspaceSerializer(read_only=True)
 
@@ -19,6 +19,19 @@ class MembershipSerializer(serializers.ModelSerializer):
         model = Membership
         fields = [
             "workspace",
+            "role",
+            "created_at",
+        ]
+
+class MembershipSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = Membership
+        fields = [
+            "id",
+            "user",
+            "user_email",
             "role",
             "created_at",
         ]

@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from apps.projects.serializers import ProjectSerializer
 from apps.workspaces.permissions import IsMember, IsWorkspaceAdmin, IsWorkspaceMember
-from apps.workspaces.serializers import MembershipSerializer, WorkspaceSerializer
+from apps.workspaces.serializers import MembershipReadSerializer, WorkspaceSerializer
 from rest_framework import status
 from .models import Workspace, Membership
 
@@ -75,7 +75,7 @@ class MyWorkspacesView(APIView):
             .order_by("workspace__name")
         )
 
-        serializer = MembershipSerializer(
+        serializer = MembershipReadSerializer(
             memberships,
             many=True
         )
