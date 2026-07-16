@@ -6,7 +6,7 @@ from apps.tasks.models import Task, TaskComment
 from apps.workspaces.models import Membership
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-from apps.workspaces.permissions import IsAdmin, IsMember, IsWorkspaceMember
+from apps.workspaces.permissions import IsAdmin, IsMember
 from .models import Project
 from .serializers import ProjectSerializer, TaskAttachmentSerializer, TaskCommentSerializer, TaskSerializer
 from rest_framework.generics import ListCreateAPIView, get_object_or_404

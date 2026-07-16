@@ -4,10 +4,14 @@ from django.conf import settings
 class ActivityLog(models.Model):
     ACTION_CHOICES = [
         ("workspace_created", "Workspace Created"),
+        ("workspace_updated", "Workspace Updated"),
         ("task_created", "Task Created"),
         ("task_updated", "Task Updated"),
         ("task_archived", "Task Archived"),
         ("task_restored", "Task Restored"),
+        ("member_created", "Member Created"),
+        ("member_role_updated", "Member Role Updated"),
+        ("member_removed", "Member Removed"),
         ("task_comment_created", "Task Comment Created"),
         ("task_comment_archived", "Task Comment Archived"),
         ("task_comment_restored", "Task Comment Restored"),

@@ -3,8 +3,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
+from apps.accounts.serializers import UserListSerializer
 from .models import User
-
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
 
 class RegisterView(APIView):
 
@@ -45,3 +47,8 @@ class LoginView(APIView):
             "access": str(refresh.access_token),
             "refresh": str(refresh)
         })
+    
+class UserListAPIView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]  
+    queryset = User.objects.all().order_by("-created_at")
+    serializer_class = UserListSerializer

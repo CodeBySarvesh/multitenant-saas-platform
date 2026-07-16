@@ -1,6 +1,8 @@
 from django.http import HttpResponseForbidden
 from .models import Workspace, Membership
-
+from django.conf import settings
+from django.core.cache import cache
+from django.http import HttpResponseForbidden
 
 # class WorkspaceMiddleware:
 
@@ -38,16 +40,7 @@ from .models import Workspace, Membership
 
 
 # ------ after adding Redis cache -------
-from django.core.cache import cache
-from django.http import HttpResponseForbidden
-
-from .models import Workspace, Membership
-
-
 class WorkspaceMiddleware:
-
-    WORKSPACE_CACHE_TIMEOUT = 600      # 10 minutes
-    MEMBERSHIP_CACHE_TIMEOUT = 300     # 5 minutes
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -73,42 +66,13 @@ class WorkspaceMiddleware:
                 cache.set(
                     workspace_cache_key,
                     workspace,
-                    timeout=self.WORKSPACE_CACHE_TIMEOUT
+                    timeout=settings.WORKSPACE_CACHE_TIMEOUT,
                 )
 
             except Workspace.DoesNotExist:
                 return HttpResponseForbidden("Invalid workspace.")
         else:
             print("CACHE HIT - using Redis")
-
-        if request.user.is_authenticated:
-
-            membership_cache_key = (
-                f"membership:{request.user.id}:{workspace.id}"
-            )
-
-            is_member = cache.get(membership_cache_key)
-
-            if is_member is None:
-                print("MEMBERSHIP CACHE MISS - querying database")
-
-                is_member = Membership.objects.filter(
-                    workspace=workspace,
-                    user=request.user
-                ).exists()
-
-                cache.set(
-                    membership_cache_key,
-                    is_member,
-                    timeout=self.MEMBERSHIP_CACHE_TIMEOUT
-                )
-            else:
-                print("MEMBERSHIP CACHE HIT - using Redis")
-
-            if not is_member:
-                return HttpResponseForbidden(
-                    "You are not a member of this workspace."
-                )
 
         request.workspace = workspace
 

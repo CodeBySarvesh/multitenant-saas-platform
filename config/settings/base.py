@@ -143,3 +143,6 @@ CACHES = {
         "KEY_PREFIX": "multitenant",
     }
 }
+
+WORKSPACE_CACHE_TIMEOUT = 600
+MEMBERSHIP_CACHE_TIMEOUT = 300
