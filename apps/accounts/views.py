@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.exceptions import ValidationError
 from apps.accounts.serializers import UserListSerializer
 from .models import User
 from rest_framework import generics
@@ -52,3 +53,29 @@ class UserListAPIView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]  
     queryset = User.objects.all().order_by("-created_at")
     serializer_class = UserListSerializer
+
+class LogoutAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+
+        if not refresh_token:
+            return Response(
+                {"message": "Refresh token is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except Exception:
+            return Response(
+                {"message": "Invalid or expired refresh token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {"message": "Successfully logged out."},
+            status=status.HTTP_205_RESET_CONTENT,
+        )

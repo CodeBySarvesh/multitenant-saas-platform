@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'apps.tasks',
     'apps.notifications',
     'apps.audit',
+    "rest_framework_simplejwt.token_blacklist",
 ]
 
 MIDDLEWARE = [
@@ -146,3 +147,16 @@ CACHES = {
 
 WORKSPACE_CACHE_TIMEOUT = 600
 MEMBERSHIP_CACHE_TIMEOUT = 300
+
+
+CELERY_BROKER_URL = "redis://redis:6379/0"
+
+CELERY_RESULT_BACKEND = "redis://redis:6379/0"
+
+CELERY_ACCEPT_CONTENT = ["json"]
+
+CELERY_TASK_SERIALIZER = "json"
+
+CELERY_RESULT_SERIALIZER = "json"
+
+CELERY_TIMEZONE = "Asia/Kolkata"

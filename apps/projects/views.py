@@ -3,13 +3,14 @@ from rest_framework.response import Response
 from rest_framework import status
 from apps.audit.models import ActivityLog
 from apps.tasks.models import Task, TaskComment
+from apps.tasks.tasks import process_attachment
 from apps.workspaces.models import Membership
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from apps.workspaces.permissions import IsAdmin, IsMember
 from .models import Project
 from .serializers import ProjectSerializer, TaskAttachmentSerializer, TaskCommentSerializer, TaskSerializer
-from rest_framework.generics import ListCreateAPIView, get_object_or_404
+from rest_framework.generics import ListCreateAPIView, UpdateAPIView, get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 
@@ -32,7 +33,31 @@ class ProjectListCreateAPIView(ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
-        serializer.save(workspace=self.request.workspace)
+        project = serializer.save(workspace=self.request.workspace)
+
+        ActivityLog.objects.create(
+            workspace=self.request.workspace,
+            user=self.request.user,
+            action="project_created",
+            message=f"{self.request.user.email} created project '{project.name}'"
+        )
+
+class ProjectUpdateAPIView(UpdateAPIView):
+    serializer_class = ProjectSerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get_queryset(self):
+        return Project.objects.filter(workspace=self.request.workspace)
+
+    def perform_update(self, serializer):
+        project = serializer.save()
+
+        ActivityLog.objects.create(
+            workspace=self.request.workspace,
+            user=self.request.user,
+            action="project_updated",
+            message=f"{self.request.user.email} updated project '{project.name}'"
+        )
     
 class ProjectDeleteAPIView(APIView):
 
@@ -137,7 +162,42 @@ class TaskListCreateAPIView(ListCreateAPIView):
             action="task_created",
             message=f"{self.request.user.email} created task '{task.title}'"
         )
- 
+
+class TaskUpdateAPIView(UpdateAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated, IsMember]
+
+    def get_queryset(self):
+        return Task.objects.filter(
+            project__workspace=self.request.workspace
+        ).select_related("project", "assigned_to")
+
+    def perform_update(self, serializer):
+        assigned_user = serializer.validated_data.get(
+            "assigned_to",
+            serializer.instance.assigned_to
+        )
+
+        membership = Membership.objects.get(
+            user=self.request.user,
+            workspace=self.request.workspace
+        )
+
+        if membership.role not in ["admin", "owner"]:
+            if assigned_user and assigned_user != self.request.user:
+                raise PermissionDenied(
+                    "You can only update your own task."
+                )
+
+        task = serializer.save()
+
+        ActivityLog.objects.create(
+            user=self.request.user,
+            workspace=self.request.workspace,
+            action="task_updated",
+            message=f"{self.request.user.email} updated task '{task.title}'"
+        )
+
 class TaskDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
@@ -237,6 +297,40 @@ class TaskCommentAPIView(ListCreateAPIView):
             message=f"{self.request.user.email} commented on task '{task.title}'",
         )
 
+class TaskCommentUpdateAPIView(UpdateAPIView):
+    serializer_class = TaskCommentSerializer
+    permission_classes = [IsAuthenticated, IsMember]
+
+    def get_queryset(self):
+        return TaskComment.objects.filter(
+            task__project__workspace=self.request.workspace
+        ).select_related("user", "task")
+
+    def perform_update(self, serializer):
+        comment = serializer.instance
+
+        membership = Membership.objects.get(
+            user=self.request.user,
+            workspace=self.request.workspace
+        )
+
+        if (
+            comment.user != self.request.user
+            and membership.role not in ["admin", "owner"]
+        ):
+            raise PermissionDenied(
+                "You can update only your own comments."
+            )
+
+        comment = serializer.save()
+
+        ActivityLog.objects.create(
+            user=self.request.user,
+            workspace=self.request.workspace,
+            action="task_comment_updated",
+            message=f"{self.request.user.email} updated comment on task '{comment.task.title}'"
+        )
+
 class TaskCommentDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
@@ -325,7 +419,15 @@ class TaskAttachmentAPIView(APIView):
         serializer = TaskAttachmentSerializer(data=request.data)
 
         if serializer.is_valid():
-            serializer.save(task=task, uploaded_by=request.user)
-            return Response(serializer.data, status=201)
+            attachment = serializer.save(
+                task=task,
+                uploaded_by=request.user
+            )
+            process_attachment.delay(attachment.id)
+
+            return Response(
+                TaskAttachmentSerializer(attachment).data,
+                status=201
+            )
 
         return Response(serializer.errors, status=400)

@@ -193,7 +193,7 @@ class MembershipCreateAPIView(APIView):
         ActivityLog.objects.create(
             workspace=request.workspace,
             user=request.user,
-            action="member_created",
+            action="member_assigned",
             message=f"{request.user.email} added {user.email} as {membership.role}"
         )
 
