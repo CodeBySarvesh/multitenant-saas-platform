@@ -13,6 +13,7 @@ from .serializers import ProjectSerializer, TaskAttachmentSerializer, TaskCommen
 from rest_framework.generics import ListCreateAPIView, UpdateAPIView, get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
+from apps.notifications.tasks import send_task_assignment_email_task
 
 class ProjectListCreateAPIView(ListCreateAPIView):
     serializer_class = ProjectSerializer
@@ -155,6 +156,8 @@ class TaskListCreateAPIView(ListCreateAPIView):
                 )
 
         task = serializer.save(project=project)
+        if task.assigned_to:
+            send_task_assignment_email_task.delay(task.id)
 
         ActivityLog.objects.create(
             user=self.request.user,
@@ -189,7 +192,21 @@ class TaskUpdateAPIView(UpdateAPIView):
                     "You can only update your own task."
                 )
 
+        # Store the current assignee before saving
+        old_assignee_id = serializer.instance.assigned_to_id
+
+        # Save the task
         task = serializer.save()
+
+        # Get the new assignee after saving
+        new_assignee_id = task.assigned_to_id
+
+        # Send email only if the assignee changed
+        if (
+            new_assignee_id is not None
+            and old_assignee_id != new_assignee_id
+        ):
+            send_task_assignment_email_task.delay(task.id)
 
         ActivityLog.objects.create(
             user=self.request.user,

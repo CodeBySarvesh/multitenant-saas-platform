@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+
+<body style="font-family: Arial, sans-serif;">
+
+<h2>Task Assigned</h2>
+
+<p>Hello {{ assignee_name }},</p>
+
+<p>
+A task has been assigned to you.
+</p>
+
+<table cellpadding="6">
+
+<tr>
+    <td><strong>Workspace</strong></td>
+    <td>{{ workspace }}</td>
+</tr>
+
+<tr>
+    <td><strong>Project</strong></td>
+    <td>{{ project }}</td>
+</tr>
+
+<tr>
+    <td><strong>Task</strong></td>
+    <td>{{ task }}</td>
+</tr>
+
+<tr>
+    <td><strong>Status</strong></td>
+    <td>{{ status }}</td>
+</tr>
+
+</table>
+
+<p>
+Please login to WorkspaceHQ to start working on it.
+</p>
+
+<p>
+Thanks,<br>
+WorkspaceHQ Team
+</p>
+
+</body>
+</html>

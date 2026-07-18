@@ -1,0 +1,22 @@
+Hello {{ assignee_name }},
+
+A task has been assigned to you.
+
+Workspace : {{ workspace }}
+
+Project : {{ project }}
+
+Task : {{ task }}
+
+Workspace : {{ workspace }}
+
+Project : {{ project }}
+
+Task : {{ task }}
+
+Status : {{ status }}
+
+Please login to WorkspaceHQ to start working on it.
+
+Thanks,
+WorkspaceHQ Team
