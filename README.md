@@ -166,19 +166,19 @@ Multi-tenant Django APP/
 Swagger UI
 
 ```
-/api/docs/
+/api/v1/docs/
 ```
 
 OpenAPI Schema
 
 ```
-/api/schema/
+/api/v1/schema/
 ```
 
 Redoc
 
 ```
-/api/redoc/
+/api/v1/redoc/
 ```
 
 ---
