@@ -2,21 +2,41 @@ from rest_framework.views import APIView, PermissionDenied
 from rest_framework.response import Response
 from rest_framework import status
 from apps.audit.models import ActivityLog
+from apps.common.docs import WORKSPACE_HEADER
 from apps.tasks.models import Task, TaskComment
-from apps.tasks.tasks import process_attachment
 from apps.workspaces.models import Membership
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from apps.workspaces.permissions import IsAdmin, IsMember
 from .models import Project
-from .serializers import ProjectSerializer, TaskAttachmentSerializer, TaskCommentSerializer, TaskSerializer
+from apps.common.serializers import MessageSerializer
+from .serializers import ProjectSerializer, TaskAttachmentCreateSerializer, TaskAttachmentSerializer, TaskCommentSerializer, TaskSerializer
 from rest_framework.generics import ListCreateAPIView, UpdateAPIView, get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 from apps.notifications.tasks import send_task_assignment_email_task
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework.parsers import MultiPartParser, FormParser
+from drf_spectacular.utils import (extend_schema,OpenApiParameter,OpenApiTypes)
 
+@extend_schema_view(
+    get=extend_schema(
+        summary="List projects",
+        description="Retrieve all projects in the current workspace.",
+        parameters=[WORKSPACE_HEADER],
+        responses={200: ProjectSerializer(many=True)},
+    ),
+    post=extend_schema(
+        summary="Create project",
+        description="Create a new project in the current workspace.",
+        parameters=[WORKSPACE_HEADER],
+        request=ProjectSerializer,
+        responses={201: ProjectSerializer},
+    ),
+)
 class ProjectListCreateAPIView(ListCreateAPIView):
     serializer_class = ProjectSerializer
+    queryset = Project.objects.none()
 
     # Filter & Search
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -29,6 +49,9 @@ class ProjectListCreateAPIView(ListCreateAPIView):
         return [IsAuthenticated(), IsAdmin()]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return self.queryset
+
         return Project.objects.filter(
             workspace=self.request.workspace
         )
@@ -43,6 +66,13 @@ class ProjectListCreateAPIView(ListCreateAPIView):
             message=f"{self.request.user.email} created project '{project.name}'"
         )
 
+@extend_schema(
+    summary="Update project",
+    description="Update an existing project.",
+    parameters=[WORKSPACE_HEADER],
+    request=ProjectSerializer,
+    responses={200: ProjectSerializer},
+)
 class ProjectUpdateAPIView(UpdateAPIView):
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated, IsAdmin]
@@ -59,7 +89,18 @@ class ProjectUpdateAPIView(UpdateAPIView):
             action="project_updated",
             message=f"{self.request.user.email} updated project '{project.name}'"
         )
-    
+
+@extend_schema(
+    summary="Archive project",
+    description="Soft delete (archive) a project in the current workspace.",
+    parameters=[WORKSPACE_HEADER],
+    request=None,
+    responses={
+        200: MessageSerializer,
+        400: MessageSerializer,
+        404: MessageSerializer,
+    },
+)
 class ProjectDeleteAPIView(APIView):
 
     permission_classes = [IsAuthenticated, IsAdmin]
@@ -91,6 +132,17 @@ class ProjectDeleteAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
+@extend_schema(
+    summary="Restore project",
+    description="Restore a previously archived project.",
+    parameters=[WORKSPACE_HEADER],
+    request=None,
+    responses={
+        200: MessageSerializer,
+        400: MessageSerializer,
+        404: MessageSerializer,
+    },
+)
 class ProjectRestoreAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
@@ -120,8 +172,24 @@ class ProjectRestoreAPIView(APIView):
             {"detail": "Project restored successfully."},
             status=status.HTTP_200_OK
         )
+    
 # ---- Task-----
+
+@extend_schema_view(
+    get=extend_schema(
+        summary="List tasks",
+        parameters=[WORKSPACE_HEADER],
+        responses={200: TaskSerializer(many=True)},
+    ),
+    post=extend_schema(
+        summary="Create task",
+        parameters=[WORKSPACE_HEADER],
+        request=TaskSerializer,
+        responses={201: TaskSerializer},
+    ),
+)
 class TaskListCreateAPIView(ListCreateAPIView):
+    queryset = Task.objects.none()
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated, IsMember]
 
@@ -130,6 +198,9 @@ class TaskListCreateAPIView(ListCreateAPIView):
     search_fields = ["title", "description"]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return self.queryset
+
         return Task.objects.filter(
             project__id=self.kwargs["pk"],
             project__workspace=self.request.workspace
@@ -166,6 +237,9 @@ class TaskListCreateAPIView(ListCreateAPIView):
             message=f"{self.request.user.email} created task '{task.title}'"
         )
 
+@extend_schema(
+    parameters=[WORKSPACE_HEADER]
+)
 class TaskUpdateAPIView(UpdateAPIView):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated, IsMember]
@@ -215,6 +289,17 @@ class TaskUpdateAPIView(UpdateAPIView):
             message=f"{self.request.user.email} updated task '{task.title}'"
         )
 
+@extend_schema(
+    summary="Archive task",
+    description="Soft delete (archive) a task in the current workspace.",
+    parameters=[WORKSPACE_HEADER],
+    request=None,
+    responses={
+        200: MessageSerializer,
+        400: MessageSerializer,
+        404: MessageSerializer,
+    },
+)
 class TaskDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
@@ -244,7 +329,18 @@ class TaskDeleteAPIView(APIView):
             {"detail": "Task archived successfully."},
             status=status.HTTP_200_OK
         )
-    
+
+@extend_schema(
+    summary="Restore task",
+    description="Restore a previously archived task.",
+    parameters=[WORKSPACE_HEADER],
+    request=None,
+    responses={
+        200: MessageSerializer,
+        400: MessageSerializer,
+        404: MessageSerializer,
+    },
+)
 class TaskRestoreAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
@@ -276,7 +372,23 @@ class TaskRestoreAPIView(APIView):
         )
 
 # ---Task Comment---
+@extend_schema_view(
+    get=extend_schema(
+        summary="List task comments",
+        description="Retrieve all comments for a task.",
+        parameters=[WORKSPACE_HEADER],
+        responses={200: TaskCommentSerializer(many=True)},
+    ),
+    post=extend_schema(
+        summary="Create task comment",
+        description="Add a comment to a task.",
+        parameters=[WORKSPACE_HEADER],
+        request=TaskCommentSerializer,
+        responses={201: TaskCommentSerializer},
+    ),
+)
 class TaskCommentAPIView(ListCreateAPIView):
+    queryset = TaskComment.objects.none()
     serializer_class = TaskCommentSerializer
 
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -287,6 +399,9 @@ class TaskCommentAPIView(ListCreateAPIView):
         return [IsAuthenticated(), IsMember()]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return self.queryset
+
         return (
             TaskComment.objects.filter(
                 task__id=self.kwargs["pk"],
@@ -314,6 +429,9 @@ class TaskCommentAPIView(ListCreateAPIView):
             message=f"{self.request.user.email} commented on task '{task.title}'",
         )
 
+@extend_schema(
+    parameters=[WORKSPACE_HEADER]
+)
 class TaskCommentUpdateAPIView(UpdateAPIView):
     serializer_class = TaskCommentSerializer
     permission_classes = [IsAuthenticated, IsMember]
@@ -348,6 +466,18 @@ class TaskCommentUpdateAPIView(UpdateAPIView):
             message=f"{self.request.user.email} updated comment on task '{comment.task.title}'"
         )
 
+@extend_schema(
+    summary="Archive task comment",
+    description="Soft delete (archive) a task comment.",
+    parameters=[WORKSPACE_HEADER],
+    request=None,
+    responses={
+        200: MessageSerializer,
+        400: MessageSerializer,
+        403: MessageSerializer,
+        404: MessageSerializer,
+    },
+)
 class TaskCommentDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
@@ -389,7 +519,17 @@ class TaskCommentDeleteAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
-
+@extend_schema(
+    summary="Restore task comment",
+    description="Restore a previously archived task comment.",
+    parameters=[WORKSPACE_HEADER],
+    request=None,
+    responses={
+        200: MessageSerializer,
+        400: MessageSerializer,
+        404: MessageSerializer,
+    },
+)
 class TaskCommentRestoreAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
@@ -421,30 +561,51 @@ class TaskCommentRestoreAPIView(APIView):
         )
 
 # ---Task Attachment ---
+@extend_schema(
+    parameters=[
+        WORKSPACE_HEADER,
+        OpenApiParameter(
+            name="task_id",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+            description="Task ID",
+        ),
+    ],
+    request=TaskAttachmentCreateSerializer,
+    responses={
+        201: TaskAttachmentSerializer,
+    },
+)
 class TaskAttachmentAPIView(APIView):
+
+    parser_classes = [
+        MultiPartParser,
+        FormParser,
+    ]
+
     def get_permissions(self):
         return [IsAuthenticated(), IsMember()]
+
     def post(self, request, task_id):
-        try:
-            task = Task.objects.get(
-                id=task_id,
-                project__workspace=request.workspace
-            )
-        except Task.DoesNotExist:
-            return Response({"error": "Task not found"}, status=404)
 
-        serializer = TaskAttachmentSerializer(data=request.data)
+        task = get_object_or_404(
+            Task,
+            id=task_id,
+            project__workspace=request.workspace
+        )
 
-        if serializer.is_valid():
-            attachment = serializer.save(
-                task=task,
-                uploaded_by=request.user
-            )
-            process_attachment.delay(attachment.id)
+        serializer = TaskAttachmentCreateSerializer(
+            data=request.data
+        )
 
-            return Response(
-                TaskAttachmentSerializer(attachment).data,
-                status=201
-            )
+        serializer.is_valid(raise_exception=True)
 
-        return Response(serializer.errors, status=400)
+        attachment = serializer.save(
+            task=task,
+            uploaded_by=request.user
+        )
+
+        return Response(
+            TaskAttachmentSerializer(attachment).data,
+            status=status.HTTP_201_CREATED
+        )

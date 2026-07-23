@@ -16,7 +16,6 @@ def send_task_assignment_email_task(self, task_id):
         Task.objects
         .select_related(
             "assigned_to",
-            "created_by",
             "project",
             "project__workspace",
         )

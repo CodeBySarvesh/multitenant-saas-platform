@@ -45,8 +45,21 @@ class TaskCommentSerializer(serializers.ModelSerializer):
         read_only_fields = ["task", "user_email", "created_at"]
 
 
+class TaskAttachmentCreateSerializer(serializers.ModelSerializer):
+    file = serializers.FileField()
+
+    class Meta:
+        model = TaskAttachment
+        fields = [
+            "file",
+        ]
+
 class TaskAttachmentSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = TaskAttachment
         fields = "__all__"
-        read_only_fields = ["uploaded_by","task"]
+        read_only_fields = [
+            "task",
+            "uploaded_by",
+        ]

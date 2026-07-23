@@ -24,7 +24,10 @@ class MembershipReadSerializer(serializers.ModelSerializer):
         ]
 
 class MembershipSerializer(serializers.ModelSerializer):
-    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_email = serializers.EmailField(
+        source="user.email",
+        read_only=True,
+    )
 
     class Meta:
         model = Membership
@@ -35,4 +38,10 @@ class MembershipSerializer(serializers.ModelSerializer):
             "role",
             "created_at",
         ]
-        read_only_fields = ["id","created_at","updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_role(self, value):
+        valid_roles = ["admin", "member", "owner"]
+        if value not in valid_roles:
+            raise serializers.ValidationError("Invalid role.")
+        return value

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from apps.tasks.models import Task, TaskComment
+from apps.tasks.models import Task, TaskAttachment, TaskComment
 
 
 @admin.register(Task)
@@ -23,3 +23,23 @@ class TaskCommentAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="Deleted")
     def is_deleted(self, obj):
         return obj.is_deleted
+    
+
+@admin.register(TaskAttachment)
+class TaskAttachmentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "task",
+        "file",
+        "uploaded_by",
+        "is_deleted",
+    )
+
+    search_fields = (
+        "task__id",
+        "uploaded_by__username",
+    )
+
+    readonly_fields = (
+        "uploaded_by",
+    )

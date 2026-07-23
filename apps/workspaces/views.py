@@ -1,16 +1,26 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from apps.audit.models import ActivityLog
+from apps.common.docs import WORKSPACE_HEADER
 from apps.projects.models import Project
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from apps.projects.serializers import ProjectSerializer
 from apps.workspaces.permissions import IsAdmin, IsMember, IsOwner
 from apps.workspaces.serializers import MembershipReadSerializer, MembershipSerializer, WorkspaceSerializer
+from apps.common.serializers import MessageSerializer
 from rest_framework import status
 from .models import Workspace, Membership
 from django.core.cache import cache
-from rest_framework.generics import get_object_or_404
+from rest_framework.generics import CreateAPIView, ListAPIView, UpdateAPIView, get_object_or_404
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiParameter,
+    OpenApiTypes,
+)
+
 class TestWorkspaceView(APIView):
 
     def get(self, request):
@@ -24,6 +34,14 @@ class TestWorkspaceView(APIView):
         })
 
 
+@extend_schema(
+    summary="Create workspace",
+    description="Create a new workspace and assign the authenticated user as its owner.",
+    request=WorkspaceSerializer,
+    responses={
+        201: WorkspaceSerializer,
+    },
+)
 class CreateWorkspaceView(APIView):
     permission_classes = [IsAuthenticated]
     @transaction.atomic
@@ -52,7 +70,16 @@ class CreateWorkspaceView(APIView):
             WorkspaceSerializer(workspace).data,
             status=status.HTTP_201_CREATED
         )
-    
+
+@extend_schema(
+    summary="Update workspace",
+    description="Update the current workspace.",
+    parameters=[WORKSPACE_HEADER],
+    request=WorkspaceSerializer,
+    responses={
+        200: WorkspaceSerializer,
+    },
+)  
 class WorkspaceUpdateAPIView(APIView):
 
     permission_classes = [IsAuthenticated, IsOwner]
@@ -81,7 +108,11 @@ class WorkspaceUpdateAPIView(APIView):
         )
 
         return Response(serializer.data)
-    
+
+@extend_schema(
+    responses={200: MembershipReadSerializer(many=True)},
+    summary="list workspaces",
+)
 class MyWorkspacesView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
@@ -100,6 +131,11 @@ class MyWorkspacesView(APIView):
 
         return Response(serializer.data)
 
+@extend_schema(
+    parameters=[WORKSPACE_HEADER],
+    responses={200: WorkspaceSerializer},
+    summary="Get workspace details",
+)
 class WorkspaceDetailAPIView(APIView):
 
     permission_classes = [
@@ -115,7 +151,11 @@ class WorkspaceDetailAPIView(APIView):
 
         return Response(serializer.data)
     
-
+@extend_schema(
+    parameters=[WORKSPACE_HEADER],
+    responses={200: ProjectSerializer(many=True)},
+    summary="List workspace projects",
+)
 class WorkspaceProjectsAPIView(APIView):
 
     permission_classes = [
@@ -138,116 +178,103 @@ class WorkspaceProjectsAPIView(APIView):
 
         return Response(serializer.data)
 
-# -----Membership -------  
-class MembershipListAPIView(APIView):
-
+# -----Membership ------- 
+@extend_schema(
+    parameters=[WORKSPACE_HEADER]
+)
+class MembershipListAPIView(ListAPIView):
     permission_classes = [IsAuthenticated, IsMember]
+    serializer_class = MembershipSerializer
 
-    def get(self, request):
-
-        members = (
+    def get_queryset(self):
+        return (
             Membership.objects
-            .filter(workspace=request.workspace)
+            .filter(workspace=self.request.workspace)
             .select_related("user")
             .order_by("user__email")
         )
-
-        serializer = MembershipSerializer(
-            members,
-            many=True
-        )
-
-        return Response(serializer.data)
     
-
-class MembershipCreateAPIView(APIView):
+@extend_schema(
+    parameters=[WORKSPACE_HEADER]
+)
+class MembershipCreateAPIView(CreateAPIView):
     permission_classes = [IsAuthenticated, IsAdmin]
-    def post(self, request):
+    serializer_class = MembershipSerializer
 
-        serializer = MembershipSerializer(data=request.data)
-
-        serializer.is_valid(raise_exception=True)
-
+    def perform_create(self, serializer):
         user = serializer.validated_data["user"]
 
         if Membership.objects.filter(
-            workspace=request.workspace,
-            user=user
-        ).exists():
-
-            return Response(
-                {"detail": "User is already a member."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        membership = Membership.objects.create(
-            workspace=request.workspace,
+            workspace=self.request.workspace,
             user=user,
-            role=serializer.validated_data["role"]
-        )
-
-        cache.delete(
-            f"membership:{user.id}:{request.workspace.id}"
-        )
-
-        ActivityLog.objects.create(
-            workspace=request.workspace,
-            user=request.user,
-            action="member_assigned",
-            message=f"{request.user.email} added {user.email} as {membership.role}"
-        )
-
-        return Response(
-            MembershipSerializer(membership).data,
-            status=status.HTTP_201_CREATED
-        )
-    
-class MembershipUpdateAPIView(APIView):
-
-    permission_classes = [IsAuthenticated, IsOwner]
-
-    def patch(self, request, pk):
-
-        membership = get_object_or_404(
-            Membership,
-            id=pk,
-            workspace=request.workspace
-        )
-
-        role = request.data.get("role")
-
-        if role not in ['admin','member','owner',
-        ]:
-            return Response(
-                {"detail": "Invalid role."},
-                status=status.HTTP_400_BAD_REQUEST
+        ).exists():
+            raise serializers.ValidationError(
+                {"detail": "User is already a member."}
             )
 
-        membership.role = role
-        membership.save(update_fields=["role"])
+        membership = serializer.save(workspace=self.request.workspace)
 
         cache.delete(
-            f"membership:{membership.user.id}:{request.workspace.id}"
+            f"membership:{user.id}:{self.request.workspace.id}"
         )
 
         ActivityLog.objects.create(
-            workspace=request.workspace,
-            user=request.user,
+            workspace=self.request.workspace,
+            user=self.request.user,
+            action="member_assigned",
+            message=(
+                f"{self.request.user.email} added "
+                f"{user.email} as {membership.role}"
+            )
+        )
+
+@extend_schema(
+    parameters=[WORKSPACE_HEADER]
+)    
+class MembershipUpdateAPIView(UpdateAPIView):
+    permission_classes = [IsAuthenticated, IsOwner]
+    serializer_class = MembershipSerializer
+    http_method_names = ["patch"]
+
+    def get_queryset(self):
+        return Membership.objects.filter(
+            workspace=self.request.workspace
+        )
+
+    def perform_update(self, serializer):
+        role = serializer.validated_data["role"]
+        membership = serializer.save()
+
+        cache.delete(
+            f"membership:{membership.user.id}:{self.request.workspace.id}"
+        )
+
+        ActivityLog.objects.create(
+            workspace=self.request.workspace,
+            user=self.request.user,
             action="member_role_updated",
             message=(
-                f"{request.user.email} changed "
+                f"{self.request.user.email} changed "
                 f"{membership.user.email}'s role to {role}"
             )
         )
-
-        return Response(
-            MembershipSerializer(membership).data
-        )
-    
+         
 class MembershipDeleteAPIView(APIView):
 
     permission_classes = [IsAuthenticated, IsOwner]
-
+    @extend_schema(
+        summary="Remove workspace member",
+        description="Remove a member from the current workspace. The workspace owner cannot be removed.",
+        parameters=[
+            WORKSPACE_HEADER
+        ],
+        request=None,
+        responses={
+            200: MessageSerializer,
+            400: MessageSerializer,
+            404: MessageSerializer,
+        },
+    )
     def delete(self, request, pk):
 
         membership = get_object_or_404(
