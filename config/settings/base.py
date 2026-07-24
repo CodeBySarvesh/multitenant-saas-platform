@@ -140,18 +140,28 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 WORKSPACE_CACHE_TIMEOUT = 600
 MEMBERSHIP_CACHE_TIMEOUT = 300
 
+REDIS_URL = config("REDIS_URL")
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": config("REDIS_URL"),
+        "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {
+                "ssl_cert_reqs": "required",
+            },
         },
     }
 }
 
-CELERY_BROKER_URL = config("REDIS_URL")
-CELERY_RESULT_BACKEND = config("REDIS_URL")
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+
+if REDIS_URL.startswith("rediss://"):
+    CELERY_BROKER_URL += "?ssl_cert_reqs=CERT_REQUIRED"
+    CELERY_RESULT_BACKEND += "?ssl_cert_reqs=CERT_REQUIRED"
+
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
