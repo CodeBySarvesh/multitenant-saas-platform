@@ -80,6 +80,8 @@ Task assignment emails are sent asynchronously using:
 - Redis
 - Brevo SMTP
 
+> Note: Celery worker execution is available in the local Docker environment. Production requires a separate Celery Worker service.
+
 Emails are triggered when:
 
 - A task is created with an assignee
@@ -117,22 +119,112 @@ Dockerized development environment including:
 
 # Project Architecture
 
+The application follows a scalable backend architecture using Django REST Framework, PostgreSQL, Redis, Celery, and SMTP email processing.
+
 ```
-                   Client
-                      │
-                      ▼
-           Django REST Framework
-                      │
-      ┌───────────────┼───────────────┐
-      ▼               ▼               ▼
- PostgreSQL         Redis          Celery
-      │                               │
-      │                               ▼
-      │                         Brevo SMTP
-      │                               │
-      └───────────────────────────────▼
-                               Email Notification
+                         Client
+                            │
+                            ▼
+                 Django REST Framework
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        ▼                   ▼                   ▼
+   PostgreSQL             Redis            Celery Worker
+        │                   │                   │
+        │                   │                   ▼
+        │                   │              Brevo SMTP
+        │                   │                   │
+        │                   │                   ▼
+        │                   │          Email Notification
+        │                   │
+        └───────────────────┴───────────────────┘
 ```
+
+## Components
+
+### Django REST Framework
+- Handles API requests
+- Authentication and authorization
+- Workspace isolation
+- Business logic
+
+### PostgreSQL
+- Stores application data
+- User accounts
+- Workspaces
+- Projects
+- Tasks
+- Activity logs
+
+### Redis
+Used for:
+- Workspace caching
+- Membership caching
+- Celery message broker
+
+### Celery Worker
+Handles asynchronous tasks:
+- Task assignment emails
+- Background processing
+
+### Brevo SMTP
+Used for:
+- Sending email notifications
+
+---
+
+# Deployment Architecture
+
+## Local Development
+
+Docker Compose runs the complete architecture:
+
+```
+Django
+  │
+  ├── PostgreSQL Container
+  │
+  ├── Redis Container
+  │
+  └── Celery Worker Container
+          │
+          └── Brevo SMTP
+```
+
+---
+
+## Production Deployment
+
+The hosted demo uses:
+
+```
+                         Client
+                            │
+                            ▼
+                   Render Web Service
+                    (Django API)
+                            │
+          ┌─────────────────┴─────────────────┐
+          ▼                                   ▼
+    Neon PostgreSQL                      Upstash Redis
+```
+
+Celery remains part of the application architecture:
+
+```
+                         Celery Worker
+                              │
+                              ▼
+                         Upstash Redis
+                              │
+                              ▼
+                         Brevo SMTP
+```
+
+The current Render free-tier deployment does not include a separate Background Worker service, so the Celery Worker is not running in the hosted demo.
+
+To enable production background processing, deploy Celery as a separate worker service.
 
 ---
 
@@ -244,6 +336,45 @@ or
 ```bash
 docker compose exec celery celery -A config worker -l info
 ```
+
+---
+
+# Background Tasks Deployment Note
+
+## Local Development
+
+The local Docker environment runs:
+
+- Django web service
+- PostgreSQL database
+- Redis server
+- Celery worker
+
+Redis acts as the message broker, and Celery processes background jobs such as task assignment email notifications.
+
+Start the complete development environment:
+
+```bash
+docker compose up
+
+# Production Deployment (Render)
+
+The hosted demo is deployed on Render.
+
+Production services:
+
+- Django REST API runs as a Render Web Service.
+- PostgreSQL is hosted on Neon Database.
+- Redis is hosted on Upstash Redis.
+
+The Render free tier does not include Background Worker services, therefore the Celery worker is not deployed in the hosted demo.
+
+As a result:
+- API functionality works normally.
+- Redis caching works normally.
+- Celery background tasks (such as task assignment emails) require a separate Celery Worker deployment.
+
+For a full production setup with asynchronous processing, deploy Celery as a separate background worker service.
 
 ---
 
